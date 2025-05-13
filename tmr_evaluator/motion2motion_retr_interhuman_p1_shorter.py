@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # tmr_evaluator/motion2motion_retr_interhuman.py
+# usage:yyang@i14s42:/cvhci/temp/yyang/motionfix$ python -m tmr_evaluator.motion2motion_retr_interhuman_p1_shorter
 
 import os, glob
 from pathlib import Path
@@ -51,8 +52,8 @@ def main():
     model = load_model_from_cfg(cfg, ckpt_name="last", eval_mode=True, device="cuda")
     device = next(model.parameters()).device
 
-    # 扫描所有 person2 下 .npy
-    data_dir = r"/cvhci/temp/yyang/data_interhuman/InterHuman-Dataset/Dataset/motions_processed/person2"
+    # 扫描所有 person1 下 .npy
+    data_dir = r"/cvhci/temp/yyang/data_interhuman/InterHuman-Dataset/Dataset/motions_processed/person1"
     files = sorted(glob.glob(os.path.join(data_dir, "*.npy")))
     keyids = [Path(f).stem for f in files]
 
@@ -61,15 +62,33 @@ def main():
     W, S = FPS*W_SEC, FPS*W_SEC//2
 
     # 切窗+135维预处理
-    windows, meta = [], []
+    # windows, meta = [], []
+    # for key, path in zip(keyids, files):
+    #     raw = np.load(path).astype(np.float32)  # (T,492)
+    #     T = raw.shape[0]
+    #     for start in range(0, T - W + 1, S):
+    #         seg = raw[start:start+W]                    # (W,492)
+    #         feat135 = preprocess_motion_135(seg)        # Tensor (W,135)
+    #         windows.append(feat135)
+    #         meta.append((key, start))
+    windows = []
+    meta    = []
     for key, path in zip(keyids, files):
         raw = np.load(path).astype(np.float32)  # (T,492)
-        T = raw.shape[0]
-        for start in range(0, T - W + 1, S):
-            seg = raw[start:start+W]                    # (W,492)
-            feat135 = preprocess_motion_135(seg)        # Tensor (W,135)
-            windows.append(feat135)
-            meta.append((key, start))
+        T   = raw.shape[0]
+
+        # 如果整条序列长度小于一个窗口，直接当一个窗口处理
+        if T < W:
+            feat = preprocess_motion_135(raw)   # (T,135)
+            windows.append(feat)
+            meta.append((key, 0))
+        else:
+        # 否则按半重叠滑窗切分
+            for start in range(0, T - W + 1, S):
+                seg  = raw[start : start + W]   # (W,492)
+                feat = preprocess_motion_135(seg)  # (W,135)
+                windows.append(feat)
+                meta.append((key, start))
 
     # 生成 embedding —— 显式 motion 模式
     model.eval()
@@ -105,8 +124,8 @@ def main():
                 "sim_score": float(sim_mat[i, j]),
             })
     df = pd.DataFrame(records)
-    df.to_csv(cwd/"person2_top2_neighbors.csv", index=False, encoding="utf-8-sig")
-    print("Done, saved person2_top2_neighbors.csv")
+    df.to_csv(cwd/"person1_top2_neighbors.csv", index=False, encoding="utf-8-sig")
+    print("Done, saved person1_top2_neighbors.csv")
 
 if __name__ == "__main__":
     main()

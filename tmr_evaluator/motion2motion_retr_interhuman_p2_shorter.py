@@ -61,15 +61,33 @@ def main():
     W, S = FPS*W_SEC, FPS*W_SEC//2
 
     # 切窗+135维预处理
-    windows, meta = [], []
+    # windows, meta = [], []
+    # for key, path in zip(keyids, files):
+    #     raw = np.load(path).astype(np.float32)  # (T,492)
+    #     T = raw.shape[0]
+    #     for start in range(0, T - W + 1, S):
+    #         seg = raw[start:start+W]                    # (W,492)
+    #         feat135 = preprocess_motion_135(seg)        # Tensor (W,135)
+    #         windows.append(feat135)
+    #         meta.append((key, start))
+    windows = []
+    meta    = []
     for key, path in zip(keyids, files):
         raw = np.load(path).astype(np.float32)  # (T,492)
-        T = raw.shape[0]
-        for start in range(0, T - W + 1, S):
-            seg = raw[start:start+W]                    # (W,492)
-            feat135 = preprocess_motion_135(seg)        # Tensor (W,135)
-            windows.append(feat135)
-            meta.append((key, start))
+        T   = raw.shape[0]
+
+        # 如果整条序列长度小于一个窗口，直接当一个窗口处理
+        if T < W:
+            feat = preprocess_motion_135(raw)   # (T,135)
+            windows.append(feat)
+            meta.append((key, 0))
+        else:
+        # 否则按半重叠滑窗切分
+            for start in range(0, T - W + 1, S):
+                seg  = raw[start : start + W]   # (W,492)
+                feat = preprocess_motion_135(seg)  # (W,135)
+                windows.append(feat)
+                meta.append((key, start))
 
     # 生成 embedding —— 显式 motion 模式
     model.eval()
